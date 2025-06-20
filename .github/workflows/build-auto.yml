@@ -41,3 +41,8 @@ jobs:
         export ASEPRITE=$PWD/build/bin/aseprite
         cd tests
         $XVFB bash run-tests.sh
+    - name: Upload_Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Aseprite-${{ runner.os }}-${{ matrix.build_type }}
+        path: build/bin/*
