@@ -353,6 +353,7 @@ void SaveFileCopyAsCommand::onExecute(Context* context)
   doc::AniDir aniDirValue = params().aniDir();
   bool isPlaySubtags = params().playSubtags();
   bool isForTwitter = false;
+  bool isIgnoreEmpty = params().ignoreEmpty();
 
   if (params().ui() && context->isUIAvailable()) {
     ExportFileWindow win(doc);
@@ -395,6 +396,7 @@ void SaveFileCopyAsCommand::onExecute(Context* context)
     }
 
     win.remapWindow();
+    win.centerWindow();
     load_window_pos(&win, "ExportFile");
   again:;
     const bool result = win.show();
@@ -428,6 +430,7 @@ void SaveFileCopyAsCommand::onExecute(Context* context)
     aniDirValue = win.aniDirValue();
     isForTwitter = win.isForTwitter();
     isPlaySubtags = win.isPlaySubtags();
+    isIgnoreEmpty = win.isIgnoreEmpty();
   }
 
   gfx::PointF scaleXY(scale, scale);
@@ -496,6 +499,7 @@ void SaveFileCopyAsCommand::onExecute(Context* context)
     if (!bounds.isEmpty())
       params().bounds(bounds);
     params().playSubtags(isPlaySubtags);
+    params().ignoreEmpty(isIgnoreEmpty);
 
     // TODO This should be set as options for the specific encoder
     GifEncoderDurationFix fixGif(isForTwitter);
