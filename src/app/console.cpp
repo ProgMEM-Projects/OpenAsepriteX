@@ -269,6 +269,8 @@ void Console::printf(const char* format, ...)
 
   // Update the textbox
   m_console->addMessage(msg);
+  m_console->invalidate();
+  m_console->flushRedraw();
 }
 
 // static
@@ -300,7 +302,7 @@ void Console::showException(const std::exception& e)
 // static
 void Console::notifyNewDisplayConfiguration()
 {
-  if (m_console)
+  if (m_console && !m_console->hasConsoleText())
     m_console->centerConsole();
 }
 
