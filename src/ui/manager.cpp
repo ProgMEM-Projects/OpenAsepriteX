@@ -1,5 +1,5 @@
 // Aseprite UI Library
-// Copyright (C) 2018-2025  Igara Studio S.A.
+// Copyright (C) 2018-present  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This file is released under the terms of the MIT license.
@@ -461,6 +461,25 @@ void Manager::generateMessagesFromOSEvents()
         break;
       }
 
+      case os::Event::WindowLeave:
+        if (capture_widget) {
+          const gfx::Point mousePos = display->nativeWindow()->pointFromScreen(
+            get_mouse_position());
+          auto* msg = newMouseMessage(kMouseUpMessage,
+                                      display,
+                                      nullptr,
+                                      mousePos,
+                                      PointerType::Unknown,
+                                      // No button indicates the capture was lost
+                                      kButtonNone,
+                                      kKeyUninitializedModifier);
+          msg->setRecipient(capture_widget);
+          enqueueMessage(msg);
+
+          setMouse(nullptr);
+        }
+        break;
+
       case os::Event::CloseWindow: {
         Message* msg = new Message(kCloseDisplayMessage);
         msg->setDisplay(display);
@@ -483,6 +502,7 @@ void Manager::generateMessagesFromOSEvents()
         Message* msg = new DropFilesMessage(osEvent.files());
         msg->setDisplay(display);
         msg->setRecipient(this);
+        msg->setPropagateToChildren(true);
         enqueueMessage(msg);
         break;
       }
@@ -652,16 +672,20 @@ void Manager::handleMouseDown(Display* display,
   if (!handleWindowZOrder())
     return;
 
-  enqueueMessage(newMouseMessage(kMouseDownMessage,
-                                 display,
-                                 (capture_widget ? capture_widget : mouse_widget),
-                                 mousePos,
-                                 pointerType,
-                                 mouseButton,
-                                 modifiers,
-                                 gfx::Point(0, 0),
-                                 false,
-                                 pressure));
+  std::unique_ptr<MouseMessage> mouseMsg(
+    newMouseMessage(kMouseDownMessage,
+                    display,
+                    (capture_widget ? capture_widget : mouse_widget),
+                    mousePos,
+                    pointerType,
+                    mouseButton,
+                    modifiers,
+                    gfx::Point(0, 0),
+                    false,
+                    pressure));
+
+  if (onEnqueueMouseDown(mouseMsg.get()))
+    enqueueMessage(mouseMsg.release());
 }
 
 void Manager::handleMouseUp(Display* display,
@@ -1457,6 +1481,7 @@ void Manager::_openWindow(Window* window, bool center)
       spec.minimizable(window->isDesktop());
       spec.borderless(!window->isDesktop());
       spec.transparent(window->isTransparent());
+      spec.modal(window->isForeground());
 
       if (!window->isDesktop()) {
         spec.parent(parentDisplay->nativeWindow());
@@ -1847,6 +1872,11 @@ void Manager::onNewDisplayConfiguration(Display* display)
   container->flushRedraw();
 }
 
+bool Manager::onEnqueueMouseDown(MouseMessage* mouseMsg)
+{
+  return true;
+}
+
 void Manager::onSizeHint(SizeHintEvent& ev)
 {
   int w = 0, h = 0;
@@ -1953,12 +1983,11 @@ bool Manager::sendMessageToWidget(Message* msg, Widget* widget)
     static const char* msg_name[] = {
       "kOpenMessage",         "kCloseMessage",     "kCloseDisplayMessage", "kResizeDisplayMessage",
       "kPaintMessage",        "kTimerMessage",     "kDropFilesMessage",    "kWinMoveMessage",
-
       "kKeyDownMessage",      "kKeyUpMessage",     "kFocusEnterMessage",   "kFocusLeaveMessage",
-
       "kMouseDownMessage",    "kMouseUpMessage",   "kDoubleClickMessage",  "kMouseEnterMessage",
       "kMouseLeaveMessage",   "kMouseMoveMessage", "kSetCursorMessage",    "kMouseWheelMessage",
-      "kTouchMagnifyMessage", "kCallbackMessage",
+      "kTouchMagnifyMessage", "kDragEnterMessage", "kDragLeaveMessage",    "kDragMessage",
+      "kDropMessage",         "kCallbackMessage",
     };
     static_assert(
       kOpenMessage == 0 && kCallbackMessage == sizeof(msg_name) / sizeof(const char*) - 1,
@@ -2270,16 +2299,16 @@ Widget* Manager::findMagneticWidget(Widget* widget)
 }
 
 // static
-Message* Manager::newMouseMessage(MessageType type,
-                                  Display* display,
-                                  Widget* widget,
-                                  const gfx::Point& mousePos,
-                                  PointerType pointerType,
-                                  MouseButton button,
-                                  KeyModifiers modifiers,
-                                  const gfx::Point& wheelDelta,
-                                  bool preciseWheel,
-                                  float pressure)
+MouseMessage* Manager::newMouseMessage(MessageType type,
+                                       Display* display,
+                                       Widget* widget,
+                                       const gfx::Point& mousePos,
+                                       PointerType pointerType,
+                                       MouseButton button,
+                                       KeyModifiers modifiers,
+                                       const gfx::Point& wheelDelta,
+                                       bool preciseWheel,
+                                       float pressure)
 {
 #ifdef __APPLE__
   // Convert Ctrl+left click -> right-click
@@ -2290,14 +2319,14 @@ Message* Manager::newMouseMessage(MessageType type,
   }
 #endif
 
-  Message* msg = new MouseMessage(type,
-                                  pointerType,
-                                  button,
-                                  modifiers,
-                                  mousePos,
-                                  wheelDelta,
-                                  preciseWheel,
-                                  pressure);
+  auto* msg = new MouseMessage(type,
+                               pointerType,
+                               button,
+                               modifiers,
+                               mousePos,
+                               wheelDelta,
+                               preciseWheel,
+                               pressure);
 
   if (display)
     msg->setDisplay(display);
